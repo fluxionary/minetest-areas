@@ -264,24 +264,24 @@ minetest.register_chatcommand("change_owner", {
 })
 
 
-minetest.register_chatcommand("area_open", {
-	params = "<ID>",
-	description = "Toggle an area open (anyone can interact) or closed",
+minetest.register_chatcommand("area_tag", {
+	params = "<ID> <tag>",
+	description = "Toggle an area tag",
 	func = function(name, param)
-		local id = tonumber(param)
-		if not id then
-			return false, "Invalid usage, see /help area_open."
+		local idstr, tagname = param:match('^(%d+)%s+(.*)$')
+		local area_id = tonumber(idstr)
+		if not area_id then
+			return false, "Invalid usage, see /help area_tag."
+		elseif not areas.areas[area_id] then
+			return false, "Area " .. area_id .. " does not exist."
+		elseif not areas:isAreaOwner(area_id, name) then
+			return false, "Area " .. area_id .. " is not owned by you."
+		elseif not areas.tags[tagname] then
+			return false, "Unknown tag " .. tagname .. "."
 		end
-
-		if not areas:isAreaOwner(id, name) then
-			return false, "Area "..id.." does not exist"
-					.." or is not owned by you."
-		end
-		local open = not areas.areas[id].open
-		-- Save false as nil to avoid inflating the DB.
-		areas.areas[id].open = open or nil
-		areas:save()
-		return true, ("Area %s."):format(open and "opened" or "closed")
+		areas:toggle_tag(area_id, tagname)
+        local status = areas:has_tag(area_id, open)
+		return true, ("Area %s tagged %s."):format(area_id, (status and "" or "not ") .. tagname)
 	end
 })
 

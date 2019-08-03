@@ -21,9 +21,22 @@ minetest.register_globalstep(function(dtime)
 		local areaStrings = {}
 
 		for id, area in pairs(areas:getAreasAtPos(pos)) do
-			table.insert(areaStrings, ("%s [%u] (%s%s)")
-					:format(area.name, id, area.owner,
-					area.open and ":open" or ""))
+			local area_tags = {}
+			if area.tags then
+				for tag in area.tags do
+					if areas.tags[tag] then
+						table.insert(area_tags, tag)
+					end
+				end
+			end
+			local tagstr = table.concat(area_tags, ':')
+			if tagstr == '' then
+				table.insert(areaStrings, ("%s [%u] (%s)")
+						:format(area.name, id, area.owner))
+			else
+				table.insert(areaStrings, ("%s [%u] (%s%s)")
+						:format(area.name, id, area.owner, tagstr))
+			end
 		end
 
 		for i, area in pairs(areas:getExternalHudEntries(pos)) do

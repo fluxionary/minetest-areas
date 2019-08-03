@@ -85,20 +85,24 @@ function areas:getAreasIntersectingArea(pos1, pos2)
 	return res
 end
 
+local registered_on_interact_checks = {}
+function areas:register_on_interact_check(callback)
+	table.insert(registered_on_interact_checks, callback)
+end
+
+
 -- Checks if the area is unprotected or owned by you
 function areas:canInteract(pos, name)
 	if minetest.check_player_privs(name, self.adminPrivs) then
 		return true
 	end
-	local owned = false
-	for _, area in pairs(self:getAreasAtPos(pos)) do
-		if area.owner == name or area.open then
-			return true
-		else
-			owned = true
+
+	for _, callback in ipairs(registered_on_interact_checks) do
+		rv = callback(pos, name)
+		if rv then
+			return rv
 		end
 	end
-	return not owned
 end
 
 -- Returns a table (list) of all players that own an area
@@ -108,6 +112,11 @@ function areas:getNodeOwners(pos)
 		table.insert(owners, area.owner)
 	end
 	return owners
+end
+
+local registered_on_intersection_checks = {}
+function areas:register_on_intersection_check(callback)
+	table.insert(registered_on_intersection_checks, callback)
 end
 
 --- Checks if the area intersects with an area that the player can't interact in.
@@ -124,9 +133,6 @@ function areas:canInteractInArea(pos1, pos2, name, allow_open)
 	end
 	self:sortPos(pos1, pos2)
 
-	-- Intersecting non-owned area ID, if found.
-	local blocking_area = nil
-
 	local areas = self:getAreasIntersectingArea(pos1, pos2)
 	for id, area in pairs(areas) do
 		-- First check for a fully enclosing owned area.
@@ -136,26 +142,51 @@ function areas:canInteractInArea(pos1, pos2, name, allow_open)
 				self:isSubarea(pos1, pos2, id) then
 			return true
 		end
-
-		-- Then check for intersecting non-owned (blocking) areas.
-		-- We don't bother with this check if we've already found a
-		-- blocking area, as the check is somewhat expensive.
-		-- The area blocks if the area is closed or open areas aren't
-		-- acceptable to the caller, and the area isn't owned.
-		-- Note: We can't return directly here, because there might be
-		-- an exclosing owned area that we haven't gotten to yet.
-		if not blocking_area and
-				(not allow_open or not area.open) and
-				(not name or not self:isAreaOwner(id, name)) then
-			blocking_area = id
-		end
 	end
 
-	if blocking_area then
-		return false, blocking_area
+	for _, callback in ipairs(registered_on_intersection_checks) do
+		rv, blocking_area = callback(pos1, pos2, name, allow_open)
 	end
 
 	-- There are no intersecting areas or they are only partially
 	-- intersecting areas and they are all owned by the player.
 	return true
 end
+
+------- TAGS api --------
+areas.tags = {}
+
+function areas:register_tag(tagname)
+	areas.tags[tagname] = true
+end
+
+function areas:tag_area(area_id, tagname, value)
+	local area = areas.areas[area_id]
+	if not area then return false end
+	if not areas.tags[tagname] then return false end
+	if not area.tags then area.tags = {} end
+	area.tags[tagname] = ((value or value == nil) and true) or false
+	areas:save()
+	return true
+end
+
+function areas:toggle_tag(area_id, tagname)
+	local area = areas.areas[area_id]
+	if not area then return false end
+	if not areas.tags[tagname] then return false end
+	if not area.tags then area.tags = {} end
+	area.tags[tagname] = not area.tags[tagname]
+	areas:save()
+	return true
+end
+
+
+function areas:has_tag(area_id, tagname)
+	local area = areas.areas[area_id]
+	if not area then return false end
+	if not areas.tags[tagname] then return false end
+	if not areas.tags then return false end
+	if area.tags[tagname] then return true else return false end
+end
+
+
